@@ -55,17 +55,45 @@
   </table>
   
   <script>
-    const api_url = 'https://crudcrud.com/api/ed2a7fb2e02a40c98b344c5ee7bf3e74/candyshop'; // crudcrud api url
+    const api_url = 'https://crudcrud.com/api/475d587dce1f4991992cd439de295898/candyshop'; // Replace with your CrudCrud API URL
+
+    // Initialize candies from API on page load
+    let candies = [];
+
+    async function initializePage() {
+      try {
+        await fetchCandies(); // Fetch candies from the API
+      } catch (error) {
+        console.error('Error initializing page:', error);
+      }
+    }
 
     // Function to fetch candies from the API
     async function fetchCandies() {
       try {
         const response = await fetch(api_url);
         if (!response.ok) throw new Error(`Error: ${response.statusText}`);
-        const candies = await response.json();
+        candies = await response.json();
         displayCandies(candies);
       } catch (error) {
         console.error('Error fetching candies:', error);
+      }
+    }
+
+    // Function to save candies to the API
+    async function saveCandiesToAPI(candies) {
+      try {
+        const response = await fetch(api_url, {
+          method: 'PUT', // Assuming CRUD API supports updating all candies
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(candies),
+        });
+        if (!response.ok) throw new Error(`Error: ${response.statusText}`);
+        console.log('Candies saved successfully to API');
+      } catch (error) {
+        console.error('Error saving candies to API:', error);
       }
     }
 
@@ -77,14 +105,14 @@
       candies.forEach(candy => {
         const row = candyList.insertRow();
         row.innerHTML = `
-          <td>${candy.candyName}</td>
-          <td>${candy.description}</td>
-          <td>${candy.price}</td>
+          <td>${candy.candyName || ''}</td>
+          <td>${candy.description || ''}</td>
+          <td>${candy.price || ''}</td>
           <td id="quantity_${candy._id}">${candy.quantity}</td>
           <td>
             <button onclick="editItem('${candy._id}')">Edit</button>
             <button onclick="deleteItem('${candy._id}')">Delete</button>
-            <button onclick="buyNCandy('${candy._id}', 1)">Buy 1</button>
+            <button onclick="buy1Candy('${candy._id}')">Buy 1</button>
             <button onclick="buyNCandy('${candy._id}', 2)">Buy 2</button>
             <button onclick="buyNCandy('${candy._id}', 3)">Buy 3</button>
           </td>
@@ -94,10 +122,15 @@
 
     // Function to add a new candy via API
     async function addItem() {
-      const candyName = document.getElementById('candyName').value;
-      const description = document.getElementById('description').value;
-      const price = document.getElementById('price').value;
-      const quantity = document.getElementById('quantity').value;
+      const candyName = document.getElementById('candyName').value.trim();
+      const description = document.getElementById('description').value.trim();
+      const price = parseFloat(document.getElementById('price').value);
+      const quantity = parseInt(document.getElementById('quantity').value, 10);
+
+      if (!candyName || !description || isNaN(price) || isNaN(quantity)) {
+        console.error('Invalid input data');
+        return;
+      }
 
       try {
         const response = await fetch(api_url, {
@@ -109,17 +142,13 @@
             candyName,
             description,
             price,
-            quantity: parseInt(quantity),
+            quantity,
           }),
         });
 
-        if (!response.ok) throw new Error(`Error: ${response.statusText}`);
-
-        // Clear input fields
-        document.getElementById('candyName').value = '';
-        document.getElementById('description').value = '';
-        document.getElementById('price').value = '';
-        document.getElementById('quantity').value = '1';
+        if (!response.ok) {
+          throw new Error(`Error: ${response.statusText}`);
+        }
 
         await fetchCandies(); // Fetch candies again to update the table
       } catch (error) {
@@ -143,7 +172,7 @@
           body: JSON.stringify({
             candyName,
             description,
-            price,
+            price: parseFloat(price),
             quantity: parseInt(quantity),
           }),
         });
@@ -171,7 +200,40 @@
       }
     }
 
-    // Function to buy N candies via API
+    // Function to buy 1 candy via API using PUT request
+    async function buy1Candy(candyId) {
+      const currentQuantityElement = document.getElementById(`quantity_${candyId}`);
+      const currentQuantity = parseInt(currentQuantityElement.innerText);
+
+      if (currentQuantity >= 1) {
+        try {
+          const response = await fetch(`${api_url}/${candyId}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              quantity: currentQuantity - 1,
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error(`Error buying item: ${response.statusText}`);
+          } else {
+            const updatedCandy = await response.json();
+            currentQuantityElement.innerText = updatedCandy.quantity; // Update quantity in the table
+            console.log('Item bought successfully');
+          }
+
+        } catch (error) {
+          console.error('Error buying item:', error);
+        }
+      } else {
+        console.log('Not enough stock to buy');
+      }
+    }
+
+    // Function to buy N candies via API using PUT request
     async function buyNCandy(candyId, n) {
       const currentQuantityElement = document.getElementById(`quantity_${candyId}`);
       const currentQuantity = parseInt(currentQuantityElement.innerText);
@@ -179,7 +241,7 @@
       if (currentQuantity >= n) {
         try {
           const response = await fetch(`${api_url}/${candyId}`, {
-            method: 'PATCH',
+            method: 'PUT',
             headers: {
               'Content-Type': 'application/json',
             },
@@ -192,8 +254,8 @@
             throw new Error(`Error buying item: ${response.statusText}`);
           } else {
             const updatedCandy = await response.json();
-            currentQuantityElement.innerText = updatedCandy.quantity;
-            console.log('Item bought successfully');
+            currentQuantityElement.innerText = updatedCandy.quantity; // Update quantity in the table
+            console.log(`Bought ${n} items successfully`);
           }
 
         } catch (error) {
@@ -204,9 +266,8 @@
       }
     }
 
-    // Initial fetch of candies
-    fetchCandies();
+    // Call initializePage on page load
+    window.onload = initializePage;
   </script>
-  
 </body>
 </html>
